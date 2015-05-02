@@ -1,0 +1,19 @@
+{
+  "name": "mode-device",
+  "version": "1.0.1",
+  "author": "Gaku Ueda",
+  "main": "index.js",
+  "dependencies": {
+    "ws": "0.7.1",
+    "https": "latest"
+  },
+  "description": "Mode Device library",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "Mode",
+    "IoT"
+  ],
+  "license": "MIT"
+}
