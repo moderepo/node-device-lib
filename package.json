@@ -1,11 +1,15 @@
 {
   "name": "mode-device",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Gaku Ueda",
   "main": "index.js",
   "dependencies": {
     "ws": "0.7.1",
     "https": "latest"
+  },
+  "repository" : {
+    "type" : "git",
+    "url" : "https://github.com/moderepo/node-device-lib.git"
   },
   "description": "Mode Device library",
   "scripts": {
