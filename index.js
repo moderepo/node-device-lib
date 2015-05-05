@@ -7,7 +7,7 @@ var defaultErrorCallback = function(error) {
 };
 
 var defaultCloseCallback = function(code, message) {
-  console.log('Connection Closed: ' + code + ' ' + message);
+  console.log('Connection is closed: ' + code + ' ' + message);
   if (this.pingTimer != null) {
     clearInterval(this.pingTimer);
   }
@@ -16,11 +16,11 @@ var defaultCloseCallback = function(code, message) {
 };
 
 var defaultOpenCallback = function() {
-  console.log('WebSocket Client Connected');
+  console.log('WebSocket client is connected');
   this.retryWait = 0;
   // start pinging
   var pingHandler = function() {
-    console.log('sending a ping');
+    console.log('Sending a ping');
     this.triggerPing();
   };
 
@@ -33,11 +33,11 @@ var defaultCommandCallback = function(message, flags) {
 };
 
 var defaultPongCallback = function() {
-  console.log('received a pong');
+  console.log('Received a pong');
 };
 
 var commandHandler = function(message, flags) {
-  console.log('commandHandler');
+  console.log('Command handler is called');
   console.log('Received raw message: "' + message + '"');
   console.log('Received flag: "' + flags + '"');
   var commandJson = JSON.parse(message);
@@ -63,14 +63,14 @@ var ModeDevice = function(deviceId, token) {
 };
 
 ModeDevice.prototype.reconnect = function() {
-  console.log('reconnecting');
+  console.log('Reconnecting');
   if (this.websocket != null) {
-    console.log('closing websocket');
+    console.log('Closing WebSocket');
     this.websocket.close();
     this.websocket = null;
   }
   var target = 'wss://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
-  console.log("connecting to " + target);
+  console.log("Connecting to " + target);
   this.websocket = new Ws(target, {
     headers: {
       "Authorization": 'ModeCloud ' + this.token
@@ -84,7 +84,7 @@ ModeDevice.prototype.reconnect = function() {
 };
 
 ModeDevice.prototype.scheduleReconnect = function() {
-  console.log('scheduleReconnect() reconnecting in ' + this.retryWait);
+  console.log('Reconnection is scheduled in ' + this.retryWait);
   var device = this;
   setTimeout(function() {
     device.reconnect();
@@ -100,9 +100,8 @@ ModeDevice.prototype.triggerPing = function() {
   this.websocket.ping();
 };
 
-// --- event triggering ---
 var defaultEventFinishedCallback = function() {
-  console.log('event triggered');
+  console.log('Event is triggered');
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
