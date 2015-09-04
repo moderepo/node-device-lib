@@ -17,6 +17,7 @@ Or you can use `package.json` and add `mode-device` in the dependency section.
 
 ## Usage Example
 
+~~~
   var ModeDevice = require('mode-device');
   
   //
@@ -47,7 +48,7 @@ Or you can use `package.json` and add `mode-device` in the dependency section.
   }
   
   device.listenCommands();
-
+~~~
 
 If you want to see more detail how to use it on Raspberry Pi, please read [tutorial](http://dev.tinkermode.com/docs/raspberry_pi.html).
 
