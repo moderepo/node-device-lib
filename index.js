@@ -3,7 +3,7 @@ var https = require('https');
 
 var defaultErrorCallback = function(error) {
   console.log('Error: ' + error);
-  this.scheduleReconnect();
+  this.scheduleReconnect(false);
 };
 
 var defaultCloseCallback = function(code, message) {
@@ -12,12 +12,12 @@ var defaultCloseCallback = function(code, message) {
     clearInterval(this.pingTimer);
   }
   // reconnect
-  this.scheduleReconnect();
+  this.scheduleReconnect(false);
 };
 
 var defaultOpenCallback = function() {
   console.log('WebSocket client is connected');
-  this.retryWait = 0;
+  this.retryWait = 1;
   // start pinging
   var pingHandler = function() {
     console.log('Sending a ping');
@@ -47,7 +47,8 @@ var commandHandler = function(message, flags) {
 var ModeDevice = function(deviceId, token) {
   this.token = token;
   this.deviceId = deviceId;
-  this.retryWait = 0;  // retry wait in msec
+  this.retryWait = 1;  // retry wait in msec
+  this.retryWaitFib = 1;  // retry wait in msec
   this.websocket = null;
 
   this.host = 'api.tinkermode.com';
@@ -83,17 +84,24 @@ ModeDevice.prototype.reconnect = function() {
   this.websocket.on('pong', this.pongCallback.bind(this));
 };
 
-ModeDevice.prototype.scheduleReconnect = function() {
-  console.log('Reconnection is scheduled in ' + this.retryWait);
+ModeDevice.prototype.scheduleReconnect = function(firstConnect) {
+  var wait = firstConnect ? 0 : this.retryWait;
+  console.log('Reconnection is scheduled in ' + wait);
   var device = this;
   setTimeout(function() {
     device.reconnect();
-  }, this.retryWait * 1000);
-  this.retryWait += 1;
+  }, wait * 1000);
+
+  // Only if less than 60 sec, we increment waiting time according to Fibonacci numbers.
+  if (this.retryWait < 60) {
+    var fib = this.retryWaitFib;
+    this.retryWaitFib = this.retryWait;
+    this.retryWait += fib;
+  }
 };
 
 ModeDevice.prototype.listenCommands = function() {
-  this.scheduleReconnect();
+  this.scheduleReconnect(true);
 };
 
 ModeDevice.prototype.triggerPing = function() {
