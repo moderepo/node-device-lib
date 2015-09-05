@@ -118,7 +118,7 @@ var defaultEventFinishedCallback = function() {
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
-  if((typeof eventType) != "string") {
+  if((typeof eventType) != "string" && !(eventType instanceof String)) {
     throw "eventType must be string";
   }
 
