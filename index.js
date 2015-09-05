@@ -1,6 +1,10 @@
 var Ws = require('ws');
 var https = require('https');
 
+var defaultEventErrorCallback = function(error) {
+  console.log('Error: ' + error);
+};
+
 var defaultErrorCallback = function(error) {
   console.log('Error: ' + error);
   this.scheduleReconnect(false);
@@ -54,6 +58,7 @@ var ModeDevice = function(deviceId, token) {
   this.host = 'api.tinkermode.com';
   this.port = 443;  // default to wss.
 
+  this.eventErrorCallback = defaultEventErrorCallback;
   this.errorCallback = defaultErrorCallback;
   this.closeCallback = defaultCloseCallback;
   this.openCallback = defaultOpenCallback;
@@ -113,6 +118,14 @@ var defaultEventFinishedCallback = function() {
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
+  if((typeof eventType) != "string") {
+    throw "eventType must be string";
+  }
+
+  if((typeof eventData) != "object" || (eventData instanceof Array)) {
+    throw "eventData must be object";
+  }
+
   var event = {
     "eventType": eventType,
     "eventData": eventData
@@ -133,6 +146,7 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
   };
 
   var req = https.request(options, this.eventFinishedCallback.bind(this));
+  req.on('error', this.eventErrorCallback.bind(this));
   req.write(jsonData);
   req.end();
 };
