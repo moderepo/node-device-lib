@@ -26,11 +26,11 @@ var defaultCloseCallback = function(code, message) {
 };
 
 var defaultOpenCallback = function() {
-  debuglog('WebSocket client is connected');
+  debuglog('Websocket client is connected');
   this.retryWait = 1;
   // start pinging
   var pingHandler = function() {
-    debuglog('Sending a ping');
+    debuglog('Sending a websocket ping');
     this.triggerPing();
   };
 
@@ -39,17 +39,16 @@ var defaultOpenCallback = function() {
 
 var defaultCommandCallback = function(message, flags) {
   debuglog('Received JSON message: "' + message + '"');
-  debuglog('Received flag: "' + flags + '"');
+  debuglog('Received flag: "' + JSON.stringify(flags) + '"');
 };
 
 var defaultPongCallback = function() {
-  debuglog('Received a pong');
+  debuglog('Received a websocket pong');
 };
 
 var commandHandler = function(message, flags) {
-  debuglog('Command handler is called');
-  debuglog('Received raw message: "' + message + '"');
-  debuglog('Received flag: "' + flags + '"');
+  debuglog('Received a command');
+  debuglog('Raw message: "' + message + '"');
   var commandJson = JSON.parse(message);
   this.commandCallback(commandJson, flags);
 };
