@@ -1,4 +1,4 @@
-var Ws = require('ws');
+var ws = require('ws');
 var https = require('https');
 
 function debuglog(msg) {
@@ -84,7 +84,7 @@ ModeDevice.prototype.reconnect = function() {
   }
   var target = 'wss://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
   debuglog("Connecting to " + target);
-  this.websocket = new Ws(target, {
+  this.websocket = new ws(target, {
     headers: {
       "Authorization": 'ModeCloud ' + this.token
     }
