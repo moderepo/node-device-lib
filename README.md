@@ -11,7 +11,9 @@ You need to install [Node.js](https://nodejs.org/) to use the library.
 
 We put the library at [npm package site](https://www.npmjs.com/package/mode-device), so you can just run the following command to install the library.
 
+```
 $ npm install mode-device
+```
 
 Or you can use `package.json` and add `mode-device` in the dependency section.
 
