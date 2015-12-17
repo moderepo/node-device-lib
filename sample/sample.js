@@ -26,6 +26,6 @@ device.commandCallback = function(msg, flags) {
     var v = msg['parameters']['param0'] ? 1 : 0;
     // Do something
   }
-}
+};
 
 device.listenCommands();
