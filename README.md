@@ -5,13 +5,15 @@
 MODE Device library in NodeJS provides a wrapper for the [MODE](http://www.tinkermode.com) cloud [API](http://dev.tinkermode.com/docs/api/) and handles the data objects connecting Device.
 
 ## Requirements
-You need to install [Node.js](https://nodejs.org/) to use the library.
+You need to install [Node.js](https://nodejs.org/) to use the library.  This library works with v0.10.38, v0.12 and newer version of NodeJS.
 
 ## Installation
 
 We put the library at [npm package site](https://www.npmjs.com/package/mode-device), so you can just run the following command to install the library.
 
+```
 $ npm install mode-device
+```
 
 Or you can use `package.json` and add `mode-device` in the dependency section.
 
@@ -50,12 +52,15 @@ Or you can use `package.json` and add `mode-device` in the dependency section.
   device.listenCommands();
 ~~~
 
-If you want to see more detail how to use it on Raspberry Pi, please read [tutorial](http://dev.tinkermode.com/docs/raspberry_pi.html).
+If you want to see more detail how to use it on micro controllers like Raspberry Pi or Intel Edison, please read our tutorials:
+
+- [Using Raspberry Pi with MODE](http://dev.tinkermode.com/docs/raspberry_pi.html)
+- [Using Intel Edison with MODE](http://dev.tinkermode.com/docs/edison.html)
 
 
 ## Author
 
-Naoki Takano, honten@tinkermode.com
+MODE, inc.
 
 ## License
 
