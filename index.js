@@ -151,10 +151,30 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     }
   };
 
-  var req = https.request(options, this.eventFinishedCallback.bind(this));
-  req.on('error', this.eventErrorCallback.bind(this));
+  var req = https.request(options, function(res) {
+    var that = this;
+    var body = '';
+    var wasSuccess = false;
+    if (res.statusCode == 204) {
+      wasSuccess = true;
+    }
+
+    // need to read response data to trigger 'end' event.
+    res.on('data', function(chunk) {
+      body += chunk;
+    });
+    res.on('end', function() {
+      if (wasSuccess) {
+        that.eventFinishedCallback();
+      } else {
+        that.eventErrorCallback(body);
+      }
+    });
+  }.bind(this));
   req.write(jsonData);
   req.end();
+
+  req.on('error', this.eventErrorCallback.bind(this));
 };
 
 module.exports = ModeDevice;
