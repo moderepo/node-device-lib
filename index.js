@@ -1,5 +1,6 @@
 var ws = require('ws');
 var https = require('https');
+var http = require('http');
 
 function debuglog(msg) {
   if (ModeDevice.debug) {
@@ -61,8 +62,8 @@ var ModeDevice = function(deviceId, token) {
   this.retryWaitFib = 1;  // retry wait in msec
   this.websocket = null;
 
-  this.host = 'api.tinkermode.com';
-  this.port = 443;  // default to wss.
+  this.host = '10.1.10.166';
+  this.port = 7002;  // default to wss.
 
   this.eventErrorCallback = defaultEventErrorCallback;
   this.errorCallback = defaultErrorCallback;
@@ -81,7 +82,7 @@ ModeDevice.prototype.reconnect = function() {
     this.websocket.close();
     this.websocket = null;
   }
-  var target = 'wss://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
+  var target = 'ws://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
   debuglog("Connecting to " + target);
   this.websocket = new ws(target, {
     headers: {
@@ -124,6 +125,7 @@ var defaultEventFinishedCallback = function() {
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
+  debuglog('triggerEvent');
   if((typeof eventType) != "string" && !(eventType instanceof String)) {
     throw "eventType must be string";
   }
@@ -151,7 +153,7 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     }
   };
 
-  var req = https.request(options, function(res) {
+  var req = http.request(options, function(res) {
     var that = this;
     var body = '';
     var wasSuccess = false;
@@ -171,6 +173,10 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
       }
     });
   }.bind(this));
+  req.setTimeout(1000, function() {
+    debuglog('timeout!');
+    req.abort();
+  });
   req.write(jsonData);
   req.end();
 
