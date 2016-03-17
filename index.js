@@ -61,6 +61,7 @@ var ModeDevice = function(deviceId, token) {
   this.retryWaitFib = 1;  // retry wait in msec
   this.timeout = 30 * 1000; // request timeout in msec
   this.websocket = null;
+  this.eventCounter = 0;
 
   this.host = 'api.tinkermode.com';
   this.port = 443;  // default to wss.
@@ -121,10 +122,13 @@ ModeDevice.prototype.triggerPing = function() {
 };
 
 var defaultEventFinishedCallback = function() {
-  debuglog('Event is triggered');
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
+  this.eventCounter += 1;
+  var eventId = this.eventCounter;
+  debuglog('Triggering event #' + eventId);
+
   if((typeof eventType) != "string" && !(eventType instanceof String)) {
     throw "eventType must be string";
   }
@@ -166,14 +170,19 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     });
     res.on('end', function() {
       if (wasSuccess) {
+        debuglog('Event #' + eventId + ' triggered');
         that.eventFinishedCallback();
       } else {
+        debuglog('Event #' + eventId + ' failed with an error');
         that.eventErrorCallback(body);
       }
     });
   }.bind(this));
+  req.on('socket', function() {
+    debuglog('Socket is allocated to event #' + eventId);
+  });
   req.setTimeout(this.timeout, function() {
-    debuglog('Event request timeout');
+    debuglog('Event #' + eventId + ' timed out');
     req.abort();
   });
   req.write(jsonData);
