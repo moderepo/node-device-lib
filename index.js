@@ -59,6 +59,7 @@ var ModeDevice = function(deviceId, token) {
   this.deviceId = deviceId;
   this.retryWait = 1;  // retry wait in msec
   this.retryWaitFib = 1;  // retry wait in msec
+  this.timeout = 30 * 1000; // request timeout in msec
   this.websocket = null;
 
   this.host = 'api.tinkermode.com';
@@ -171,6 +172,10 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
       }
     });
   }.bind(this));
+  req.setTimeout(this.timeout, function() {
+    debuglog('Event request timeout');
+    req.abort();
+  });
   req.write(jsonData);
   req.end();
 
