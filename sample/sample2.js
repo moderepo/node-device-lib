@@ -1,5 +1,5 @@
-//var ModeDevice = require('../index.js');
-var ModeDevice = require('mode-device');
+var ModeDevice = require('../index.js');
+//var ModeDevice = require('mode-device');
 
 //
 // Device information settings.
@@ -17,8 +17,6 @@ var device = new ModeDevice(DEVICE_ID, API_KEY);
 //
 var counter = 0;
 device.eventFinishedCallback = function() {
-  counter += 1;
-  console.log('EVENT triggered:' + counter);
 };
 for (var i = 0; i < 100; i++) {
   device.triggerEvent('first_event', {'eventItem': i});

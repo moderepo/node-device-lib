@@ -61,6 +61,7 @@ var ModeDevice = function(deviceId, token) {
   this.retryWait = 1;  // retry wait in msec
   this.retryWaitFib = 1;  // retry wait in msec
   this.websocket = null;
+  this.eventCounter = 0;
 
   this.host = '10.1.10.166';
   this.port = 7002;  // default to wss.
@@ -121,11 +122,13 @@ ModeDevice.prototype.triggerPing = function() {
 };
 
 var defaultEventFinishedCallback = function() {
-  debuglog('Event is triggered');
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
-  debuglog('triggerEvent');
+  this.eventCounter += 1;
+  var eventId = this.eventCounter;
+  debuglog('Triggering event #' + eventId);
+
   if((typeof eventType) != "string" && !(eventType instanceof String)) {
     throw "eventType must be string";
   }
@@ -167,14 +170,19 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     });
     res.on('end', function() {
       if (wasSuccess) {
+        debuglog('Event #' + eventId + ' triggered');
         that.eventFinishedCallback();
       } else {
+        debuglog('Event #' + eventId + ' failed with an error');
         that.eventErrorCallback(body);
       }
     });
   }.bind(this));
-  req.setTimeout(1000, function() {
-    debuglog('timeout!');
+  req.on('socket', function() {
+    debuglog('Socket is allocated to event #' + eventId);
+  });
+  req.setTimeout(1051, function() {
+    debuglog('Event #' + eventId + ' timed out');
     req.abort();
   });
   req.write(jsonData);
