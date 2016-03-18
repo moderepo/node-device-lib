@@ -59,9 +59,10 @@ var ModeDevice = function(deviceId, token) {
   this.deviceId = deviceId;
   this.retryWait = 1;  // retry wait in msec
   this.retryWaitFib = 1;  // retry wait in msec
-  this.timeout = 30 * 1000; // request timeout in msec
+  this.timeout = 10 * 1000; // request timeout in msec
+  this.maxRequests = 10;  // number of simultaneous requests it will process
   this.websocket = null;
-  this.eventCounter = 0;
+  this.eventCounter = 0;  // sequence id for events
 
   this.host = 'api.tinkermode.com';
   this.port = 443;  // default to wss.
@@ -74,6 +75,8 @@ var ModeDevice = function(deviceId, token) {
   this.pongCallback = defaultPongCallback;
   this.eventFinishedCallback = defaultEventFinishedCallback;
   this.pingTimer = null;
+  // Increase the number of sockets for slow networks.
+  https.globalAgent.maxSockets = 20;  // originally 5.
 };
 
 ModeDevice.prototype.reconnect = function() {
@@ -135,6 +138,19 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
 
   if((typeof eventData) != "object" || (eventData instanceof Array)) {
     throw "eventData must be object";
+  }
+
+  // Try not to pile up requests when the network is unstable.
+  var outstandingRequests = https.globalAgent.requests;
+  var hostPort = this.host + ':' + this.port;
+  if (outstandingRequests[hostPort] !== undefined) {
+    if (outstandingRequests[hostPort].length >= this.maxRequests) {
+      // If there are enough requests queued up, it doesn't attempt to issue a request.
+      var msg = 'Too many outstanding requests:' + outstandingRequests[hostPort].length;
+      debuglog(msg);
+      this.eventErrorCallback(msg);
+      return;
+    }
   }
 
   var event = {
