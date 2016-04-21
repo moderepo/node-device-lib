@@ -59,7 +59,10 @@ var ModeDevice = function(deviceId, token) {
   this.deviceId = deviceId;
   this.retryWait = 1;  // retry wait in msec
   this.retryWaitFib = 1;  // retry wait in msec
+  this.timeout = 10 * 1000; // request timeout in msec
+  this.maxRequests = 10;  // number of simultaneous requests it will process
   this.websocket = null;
+  this.eventCounter = 0;  // sequence id for events
 
   this.host = 'api.tinkermode.com';
   this.port = 443;  // default to wss.
@@ -72,6 +75,8 @@ var ModeDevice = function(deviceId, token) {
   this.pongCallback = defaultPongCallback;
   this.eventFinishedCallback = defaultEventFinishedCallback;
   this.pingTimer = null;
+  // Increase the number of sockets for slow networks.
+  https.globalAgent.maxSockets = 20;  // originally 5.
 };
 
 ModeDevice.prototype.setApiHostname = function(host) {
@@ -124,16 +129,32 @@ ModeDevice.prototype.triggerPing = function() {
 };
 
 var defaultEventFinishedCallback = function() {
-  debuglog('Event is triggered');
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
+  this.eventCounter += 1;
+  var eventId = this.eventCounter;
+  debuglog('Triggering event #' + eventId);
+
   if((typeof eventType) != "string" && !(eventType instanceof String)) {
     throw "eventType must be string";
   }
 
   if((typeof eventData) != "object" || (eventData instanceof Array)) {
     throw "eventData must be object";
+  }
+
+  // Try not to pile up requests when the network is unstable.
+  var outstandingRequests = https.globalAgent.requests;
+  var hostPort = this.host + ':' + this.port;
+  if (outstandingRequests[hostPort] !== undefined) {
+    if (outstandingRequests[hostPort].length >= this.maxRequests) {
+      // If there are enough requests queued up, it doesn't attempt to issue a request.
+      var msg = 'Too many outstanding requests:' + outstandingRequests[hostPort].length;
+      debuglog(msg);
+      this.eventErrorCallback(msg);
+      return;
+    }
   }
 
   var event = {
@@ -169,12 +190,21 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     });
     res.on('end', function() {
       if (wasSuccess) {
+        debuglog('Event #' + eventId + ' triggered');
         that.eventFinishedCallback();
       } else {
+        debuglog('Event #' + eventId + ' failed with an error');
         that.eventErrorCallback(body);
       }
     });
   }.bind(this));
+  req.on('socket', function() {
+    debuglog('Socket is allocated to event #' + eventId);
+  });
+  req.setTimeout(this.timeout, function() {
+    debuglog('Event #' + eventId + ' timed out');
+    req.abort();
+  });
   req.write(jsonData);
   req.end();
 
