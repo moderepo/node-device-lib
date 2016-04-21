@@ -79,7 +79,7 @@ var ModeDevice = function(deviceId, token) {
   https.globalAgent.maxSockets = 20;  // originally 5.
 };
 
-ModeDevice.prototype.setApiHostname = function(host) {
+ModeDevice.prototype.setApiHost = function(host) {
   this.host = host;
 }
 
