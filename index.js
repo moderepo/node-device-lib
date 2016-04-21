@@ -79,6 +79,10 @@ var ModeDevice = function(deviceId, token) {
   https.globalAgent.maxSockets = 20;  // originally 5.
 };
 
+ModeDevice.prototype.setApiHost = function(host) {
+  this.host = host;
+}
+
 ModeDevice.prototype.reconnect = function() {
   debuglog('Reconnecting websocket');
   if (this.websocket != null) {
