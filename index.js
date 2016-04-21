@@ -74,6 +74,10 @@ var ModeDevice = function(deviceId, token) {
   this.pingTimer = null;
 };
 
+ModeDevice.prototype.setApiHostname = function(host) {
+  this.host = host;
+}
+
 ModeDevice.prototype.reconnect = function() {
   debuglog('Reconnecting websocket');
   if (this.websocket != null) {
