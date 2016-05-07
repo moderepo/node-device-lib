@@ -28,13 +28,22 @@ var defaultCloseCallback = function(code, message) {
 var defaultOpenCallback = function() {
   debuglog('Websocket client is connected');
   this.retryWait = 1;
+  this.pingCounter = 0;
   // start pinging
   var pingHandler = function() {
+    // If there's no pong seen for more than three requests,
+    // re-establish the websocket connection.
+    if (this.pingCounter > 3) {
+      debuglog('Not seeing websocket pong - closing the connection');
+      this.close();
+      return;
+    }
+    this.pingCounter++;
     debuglog('Sending a websocket ping');
     this.triggerPing();
   };
 
-  this.pingTimer = setInterval(pingHandler.bind(this), 20 * 1000);
+  this.pingTimer = setInterval(pingHandler.bind(this), 25 * 1000);
 };
 
 var defaultCommandCallback = function(message, flags) {
@@ -44,6 +53,7 @@ var defaultCommandCallback = function(message, flags) {
 
 var defaultPongCallback = function() {
   debuglog('Received a websocket pong');
+  this.pingCounter--;
 };
 
 var commandHandler = function(message, flags) {
@@ -81,14 +91,18 @@ var ModeDevice = function(deviceId, token) {
 
 ModeDevice.prototype.setApiHost = function(host) {
   this.host = host;
-}
+};
+
+ModeDevice.prototype.close = function() {
+  debuglog('Closing websocket');
+  this.websocket.close();
+  this.websocket = null;
+};
 
 ModeDevice.prototype.reconnect = function() {
   debuglog('Reconnecting websocket');
   if (this.websocket != null) {
-    debuglog('Closing websocket');
-    this.websocket.close();
-    this.websocket = null;
+    this.close();
   }
   var target = 'wss://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
   debuglog("Connecting to " + target);
