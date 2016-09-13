@@ -103,6 +103,7 @@ ModeDevice.prototype.reconnect = function() {
   debuglog('Reconnecting websocket');
   if (this.websocket != null) {
     this.close();
+    return;  // reconnecting will be triggered by close event handler.
   }
   var target = 'wss://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
   debuglog("Connecting to " + target);
