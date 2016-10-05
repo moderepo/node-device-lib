@@ -23,6 +23,7 @@ var defaultCloseCallback = function(code, message) {
     clearInterval(this.pingTimer);
   }
   // reconnect
+  this.close();
   this.scheduleReconnect(false);
 };
 
