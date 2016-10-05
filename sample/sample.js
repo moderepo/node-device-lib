@@ -29,3 +29,7 @@ device.commandCallback = function(msg, flags) {
 };
 
 device.listenCommands();
+
+(function wait () {
+  setTimeout(wait, 1000);
+})();
