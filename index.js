@@ -3,7 +3,7 @@ var https = require('https');
 
 function debuglog(msg) {
   if (ModeDevice.debug) {
-    console.log('[MODE-DEVICE]' + msg);
+    console.log('[MODE-DEVICE] ' + msg);
   }
 }
 
