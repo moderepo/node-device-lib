@@ -3,7 +3,7 @@ var https = require('https');
 
 function debuglog(msg) {
   if (ModeDevice.debug) {
-    console.log(msg);
+    console.log('[MODE-DEVICE] ' + msg);
   }
 }
 
@@ -13,15 +13,17 @@ var defaultEventErrorCallback = function(error) {
 
 var defaultErrorCallback = function(error) {
   debuglog('Error: ' + error);
+  this.close();  // When an error happens, websocket object still exists.  Force close to make reconnection to work.
   this.scheduleReconnect(false);
 };
 
 var defaultCloseCallback = function(code, message) {
   debuglog('Connection is closed: ' + code + ' ' + message);
-  if (this.pingTimer != null) {
+  if (this.pingTimer !== null) {
     clearInterval(this.pingTimer);
   }
   // reconnect
+  this.close();
   this.scheduleReconnect(false);
 };
 
@@ -34,8 +36,11 @@ var defaultOpenCallback = function() {
     // If there's no pong seen for more than three requests,
     // re-establish the websocket connection.
     if (this.pingCounter > 3) {
-      debuglog('Not seeing websocket pong - closing the connection');
-      this.close();
+      debuglog('Not seeing websocket pong - closing the connection and schedulng reconnection');
+      if (this.websocket !== null) {
+        this.close();
+      }
+      this.scheduleReconnect(false);
       return;
     }
     this.pingCounter++;
@@ -95,13 +100,16 @@ ModeDevice.prototype.setApiHost = function(host) {
 
 ModeDevice.prototype.close = function() {
   debuglog('Closing websocket');
-  this.websocket.close();
+  if (this.websocket !== null) {
+    this.websocket.close();
+  }
   this.websocket = null;
 };
 
 ModeDevice.prototype.reconnect = function() {
   debuglog('Reconnecting websocket');
   if (this.websocket != null) {
+    debuglog('there is an websocket');
     this.close();
     return;  // reconnecting will be triggered by close event handler.
   }
@@ -123,9 +131,15 @@ ModeDevice.prototype.scheduleReconnect = function(firstConnect) {
   var wait = firstConnect ? 0 : this.retryWait;
   debuglog('Reconnect websocket in ' + wait + ' seconds');
   var device = this;
-  setTimeout(function() {
-    device.reconnect();
-  }, wait * 1000);
+  if (device.isReconnectScheduled !== true) {
+    debuglog('scheduling a reconnection');
+    device.isReconnectScheduled = true;
+    setTimeout(function() {
+      debuglog('scheduled reconnection triggered');
+      device.reconnect();
+      device.isReconnectScheduled = false;
+    }, wait * 1000);
+  }
 
   // Only if less than 60 sec, we increment waiting time according to Fibonacci numbers.
   if (this.retryWait < 60) {
