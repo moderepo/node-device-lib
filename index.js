@@ -19,7 +19,7 @@ var defaultErrorCallback = function(error) {
 
 var defaultCloseCallback = function(code, message) {
   debuglog('Connection is closed: ' + code + ' ' + message);
-  if (this.pingTimer != null) {
+  if (this.pingTimer !== null) {
     clearInterval(this.pingTimer);
   }
   // reconnect
@@ -37,7 +37,7 @@ var defaultOpenCallback = function() {
     // re-establish the websocket connection.
     if (this.pingCounter > 3) {
       debuglog('Not seeing websocket pong - closing the connection and schedulng reconnection');
-      if (this.websocket != null) {
+      if (this.websocket !== null) {
         this.close();
       }
       this.scheduleReconnect(false);
