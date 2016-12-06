@@ -154,7 +154,9 @@ ModeDevice.prototype.listenCommands = function() {
 };
 
 ModeDevice.prototype.triggerPing = function() {
-  this.websocket.ping();
+  if (this.websocket !== null) {
+    this.websocket.ping();
+  }
 };
 
 var defaultEventFinishedCallback = function() {
