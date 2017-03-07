@@ -1,12 +1,11 @@
 {
   "name": "mode-device",
   "description": "MODE Device library",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "author": "MODE, Inc.",
   "main": "index.js",
   "dependencies": {
-    "ws": ">=0.7.1",
-    "https": "latest"
+    "ws": ">=0.7.1"
   },
   "repository" : {
     "type" : "git",
