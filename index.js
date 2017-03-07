@@ -1,10 +1,24 @@
 var ws = require('ws');
+var http = require('http');
 var https = require('https');
+var url = require('url');
 
-function debuglog(msg) {
-  if (ModeDevice.debug) {
-    console.log('[MODE-DEVICE] ' + msg);
+function debuglog(/* ...  */) {
+  if (!ModeDevice.debug) {
+    return;
   }
+
+  if (arguments.length == 0) {
+    return;
+  }
+
+  if (typeof arguments[0] == 'string') {
+    arguments[0] = '[MODE-DEVICE] ' + arguments[0];
+  } else {
+    arguments.unshift('[MODE-DEVICE]');
+  }
+
+  console.log.apply(null, arguments);
 }
 
 var defaultEventErrorCallback = function(error) {
@@ -79,9 +93,6 @@ var ModeDevice = function(deviceId, token) {
   this.websocket = null;
   this.eventCounter = 0;  // sequence id for events
 
-  this.host = 'api.tinkermode.com';
-  this.port = 443;  // default to wss.
-
   this.eventErrorCallback = defaultEventErrorCallback;
   this.errorCallback = defaultErrorCallback;
   this.closeCallback = defaultCloseCallback;
@@ -90,12 +101,41 @@ var ModeDevice = function(deviceId, token) {
   this.pongCallback = defaultPongCallback;
   this.eventFinishedCallback = defaultEventFinishedCallback;
   this.pingTimer = null;
-  // Increase the number of sockets for slow networks.
-  https.globalAgent.maxSockets = 20;  // originally 5.
+
+  this.apiHost = 'api.tinkermode.com';
+  this.apiPort = 443;
+  this.apiUseTls = true;
+  this.setUpApiHttp();
 };
 
+ModeDevice.debug = false;
+
+// Deprecated. Use setApiHostPort() instead.
 ModeDevice.prototype.setApiHost = function(host) {
-  this.host = host;
+  this.apiHost = host;
+};
+
+ModeDevice.prototype.setApiHostPort = function(host, port, useTls) {
+  this.apiHost = host;
+  this.apiPort = port;
+  this.apiUseTls = useTls;
+  this.setUpApiHttp();
+};
+
+ModeDevice.prototype.setUpApiHttp = function() {
+  var agentOpts = {
+    keepAlive: true,
+    maxSockets: 20,
+  };
+
+  if (this.apiUseTls) {
+    this.apiHttpTransport = https;
+    this.apiHttpAgent = new https.Agent(agentOpts);
+  }
+  else {
+    this.apiHttpTransport = http;
+    this.apiHttpAgent = new http.Agent(agentOpts);
+  }
 };
 
 ModeDevice.prototype.close = function() {
@@ -113,9 +153,13 @@ ModeDevice.prototype.reconnect = function() {
     this.close();
     return;  // reconnecting will be triggered by close event handler.
   }
-  var target = 'wss://' + this.host + ':' + this.port + '/devices/' + this.deviceId + '/command';
+
+  var proto = this.apiUseTls ? 'wss' : 'ws';
+  var target = proto + '://' + this.apiHost + ':' + this.apiPort + '/devices/' + this.deviceId + '/command';
+
   debuglog("Connecting to " + target);
   this.websocket = new ws(target, {
+    agent: this.apiHttpAgent,
     headers: {
       "Authorization": 'ModeCloud ' + this.token
     }
@@ -176,8 +220,9 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
   }
 
   // Try not to pile up requests when the network is unstable.
-  var outstandingRequests = https.globalAgent.requests;
-  var hostPort = this.host + ':' + this.port;
+  var outstandingRequests = this.apiHttpAgent.requests;
+
+  var hostPort = this.apiHost + ':' + this.apiPort;
   if (outstandingRequests[hostPort] !== undefined) {
     if (outstandingRequests[hostPort].length >= this.maxRequests) {
       // If there are enough requests queued up, it doesn't attempt to issue a request.
@@ -196,8 +241,9 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
   var jsonData = JSON.stringify(event);
 
   var options = {
-    host: this.host,
-    port: this.port,
+    host: this.apiHost,
+    port: this.apiPort,
+    agent: this.apiHttpAgent,
     path: '/devices/' + this.deviceId + '/event',
     method: 'PUT',
     headers: {
@@ -207,7 +253,7 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     }
   };
 
-  var req = https.request(options, function(res) {
+  var req = this.apiHttpTransport.request(options, function(res) {
     var that = this;
     var body = '';
     var wasSuccess = false;
