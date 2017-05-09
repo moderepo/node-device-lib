@@ -199,7 +199,11 @@ ModeDevice.prototype.listenCommands = function() {
 
 ModeDevice.prototype.triggerPing = function() {
   if (this.websocket !== null) {
-    this.websocket.ping();
+    try {
+      this.websocket.ping();
+    } catch(e) {
+      debuglog('Failed to trigger ping', e);
+    }
   }
 };
 
