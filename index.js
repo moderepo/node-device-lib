@@ -22,93 +22,44 @@ function debuglog(/* ...  */) {
 }
 
 var defaultEventErrorCallback = function(error) {
-  debuglog('Event Error: ' + error);
+  console.error('Event Error: %s', error);
 };
 
-var defaultErrorCallback = function(error) {
-  debuglog('Error: ' + error);
-  this.close();  // When an error happens, websocket object still exists.  Force close to make reconnection to work.
-  this.scheduleReconnect(false);
+var defaultEventFinishedCallback = function() {
+  // noop
 };
 
-var defaultCloseCallback = function(code, message) {
-  debuglog('Connection is closed: ' + code + ' ' + message);
-  if (this.pingTimer !== null) {
-    clearInterval(this.pingTimer);
-  }
-  // reconnect
-  this.close();
-  this.scheduleReconnect(false);
-};
-
-var defaultOpenCallback = function() {
-  debuglog('Websocket client is connected');
-  this.retryWait = 1;
-  this.pingCounter = 0;
-  // start pinging
-  var pingHandler = function() {
-    // If there's no pong seen for more than three requests,
-    // re-establish the websocket connection.
-    if (this.pingCounter > 3) {
-      debuglog('Not seeing websocket pong - closing the connection and schedulng reconnection');
-      if (this.websocket !== null) {
-        this.close();
-      }
-      this.scheduleReconnect(false);
-      return;
-    }
-    this.pingCounter++;
-    debuglog('Sending a websocket ping');
-    this.triggerPing();
-  };
-
-  this.pingTimer = setInterval(pingHandler.bind(this), 25 * 1000);
-};
-
-var defaultCommandCallback = function(message, flags) {
-  debuglog('Received JSON message: "' + message + '"');
-  debuglog('Received flag: "' + JSON.stringify(flags) + '"');
-};
-
-var defaultPongCallback = function() {
-  debuglog('Received a websocket pong');
-  this.pingCounter--;
-};
-
-var commandHandler = function(message, flags) {
-  debuglog('Received a command');
-  debuglog('Raw message: "' + message + '"');
-  var commandJson = JSON.parse(message);
-  this.commandCallback(commandJson, flags);
+var defaultCommandCallback = function(cmd) {
+  console.log('Received command: action=%s parameters=%s', cmd.action, JSON.stringify(cmd.parameters));
 };
 
 var ModeDevice = function(deviceId, token) {
-  this.debug = false;
   this.token = token;
   this.deviceId = deviceId;
-  this.retryWait = 1;  // retry wait in msec
-  this.retryWaitFib = 1;  // retry wait in msec
   this.timeout = 10 * 1000; // request timeout in msec
   this.maxRequests = 10;  // number of simultaneous requests it will process
-  this.websocket = null;
   this.eventCounter = 0;  // sequence id for events
-
   this.eventErrorCallback = defaultEventErrorCallback;
-  this.errorCallback = defaultErrorCallback;
-  this.closeCallback = defaultCloseCallback;
-  this.openCallback = defaultOpenCallback;
-  this.commandCallback = defaultCommandCallback;
-  this.pongCallback = defaultPongCallback;
   this.eventFinishedCallback = defaultEventFinishedCallback;
-  this.pingTimer = null;
 
   this.apiHost = 'api.tinkermode.com';
   this.apiPort = 443;
   this.apiUseTls = true;
   this.setUpApiHttp();
+
+  this._listeningCommands = false;
+  this.commandCallback = defaultCommandCallback;
+
+  this._websocket = null;
+  this._wsPingTimer = null;
+  this._wsPendingPingMsg = null;
+  this._wsReconnectAttempts = 0;
+  this._wsReconnectDelay = 0; // seconds
+  this._wsReconnectTimer = null;
 };
 
 ModeDevice.debug = false;
+ModeDevice.WS_PING_INTERVAL = 33; // seconds
 
 // Deprecated. Use setApiHostPort() instead.
 ModeDevice.prototype.setApiHost = function(host) {
@@ -138,82 +89,170 @@ ModeDevice.prototype.setUpApiHttp = function() {
   }
 };
 
-ModeDevice.prototype.close = function() {
-  debuglog('Closing websocket');
-  if (this.websocket !== null) {
-    this.websocket.close();
+ModeDevice.prototype._wsDisconnect = function() {
+  if (this._websocket !== null) {
+    debuglog('Closing websocket');
+    this._websocket.close();
   }
-  this.websocket = null;
 };
 
-ModeDevice.prototype.reconnect = function() {
-  debuglog('Reconnecting websocket');
-  if (this.websocket != null) {
-    debuglog('there is an websocket');
-    this.close();
-    return;  // reconnecting will be triggered by close event handler.
+ModeDevice.prototype._wsCleanUp = function() {
+  this._websocket = null;
+
+  if (this._wsPingTimer) {
+    debuglog('Stopping websocket pings');
+    clearInterval(this._wsPingTimer);
+    this._wsPingTimer = null;
   }
 
-  var proto = this.apiUseTls ? 'wss' : 'ws';
-  var target = proto + '://' + this.apiHost + ':' + this.apiPort + '/devices/' + this.deviceId + '/command';
+  this._wsPendingPingMsg = null;
+};
 
-  debuglog("Connecting to " + target);
-  this.websocket = new ws(target, {
+ModeDevice.prototype._wsHandleError = function(error) {
+  debuglog('Websocket error: %s', error);
+  this._wsCleanUp();
+  this._wsScheduleReconnect();
+};
+
+ModeDevice.prototype._wsHandleClose = function(code, reason) {
+  debuglog('Websocket connection has closed: code=%d reason="%s"', code, reason);
+  this._wsCleanUp();
+  this._wsScheduleReconnect();
+};
+
+ModeDevice.prototype._wsHandleOpen = function() {
+  debuglog('Websocket connection is open');
+
+  this._wsReconnectAttempts = 0;
+  this._wsReconnectDelay = 0;
+
+  debuglog('Scheduling periodic websocket pings');
+  this._wsPingTimer = setInterval(this._wsPing.bind(this), ModeDevice.WS_PING_INTERVAL * 1000);
+};
+
+ModeDevice.prototype._wsHandleMessage = function(message) {
+  debuglog('Received websocket message: "%s"', message);
+  let data;
+  try {
+    data = JSON.parse(message);
+  } catch (e) {
+    debuglog('Message is invalid JSON');
+    return;
+  }
+
+  try {
+    this.commandCallback(data);
+  } catch (e) {
+    debuglog('Error in command callback: %s', e);
+  }
+};
+
+ModeDevice.prototype._wsPing = function() {
+  if (this._wsPendingPingMsg != null) {
+    // Did not receive pong for the previous ping.
+    debuglog('Did not receive websocket pong for ping (%s)', this._wsPendingPingMsg);
+    this._wsDisconnect(); // this will trigger auto reconnection.
+    return;
+  }
+
+  if (this._websocket) {
+    const msg = 'ts=' + Date.now();
+
+    try {
+      this._websocket.ping(msg);
+    } catch (e) {
+      debuglog('Failed to ping websocket: %s', e);
+      this._wsDisconnect(); // this will trigger auto reconnection.
+      return;
+    }
+
+    this._wsPendingPingMsg = msg;
+    debuglog('Sent websocket ping: %s', msg);
+  }
+};
+
+ModeDevice.prototype._wsHandlePong = function(msg) {
+  debuglog('Received websocket pong: %s', msg);
+  if (msg == this._wsPendingPingMsg) {
+    this._wsPendingPingMsg = null;
+  }
+};
+
+ModeDevice.prototype._wsConnect = function() {
+  const proto = this.apiUseTls ? 'wss' : 'ws';
+  const target = proto + '://' + this.apiHost + ':' + this.apiPort + '/devices/' + this.deviceId + '/command';
+
+  debuglog('Making websocket connection to %s', target);
+  this._websocket = new ws(target, {
     agent: this.apiHttpAgent,
     headers: {
       "Authorization": 'ModeCloud ' + this.token
     }
   });
-  this.websocket.on('error', this.errorCallback.bind(this));
-  this.websocket.on('close', this.closeCallback.bind(this));
-  this.websocket.on('open', this.openCallback.bind(this));
-  this.websocket.on('message', commandHandler.bind(this));
-  this.websocket.on('pong', this.pongCallback.bind(this));
+
+  this._websocket.on('error', this._wsHandleError.bind(this));
+  this._websocket.on('close', this._wsHandleClose.bind(this));
+  this._websocket.on('open', this._wsHandleOpen.bind(this));
+  this._websocket.on('message', this._wsHandleMessage.bind(this));
+  this._websocket.on('pong', this._wsHandlePong.bind(this));
+
+  this._wsReconnectTimer = null;
 };
 
-ModeDevice.prototype.scheduleReconnect = function(firstConnect) {
-  var wait = firstConnect ? 0 : this.retryWait;
-  debuglog('Reconnect websocket in ' + wait + ' seconds');
-  var device = this;
-  if (device.isReconnectScheduled !== true) {
-    debuglog('scheduling a reconnection');
-    device.isReconnectScheduled = true;
-    setTimeout(function() {
-      debuglog('scheduled reconnection triggered');
-      device.reconnect();
-      device.isReconnectScheduled = false;
-    }, wait * 1000);
+ModeDevice.prototype._wsScheduleReconnect = function() {
+  if (!this._listeningCommands) {
+    // This is triggered by a graceful shutdown, so no need to reconnect.
+    return;
   }
 
-  // Only if less than 60 sec, we increment waiting time according to Fibonacci numbers.
-  if (this.retryWait < 60) {
-    var fib = this.retryWaitFib;
-    this.retryWaitFib = this.retryWait;
-    this.retryWait += fib;
+  if (this._wsReconnectDelay < 60) {
+    // exponential backoff
+    this._wsReconnectDelay = Math.pow(2, this._wsReconnectAttempts);
   }
+
+  this._wsReconnectAttempts++;
+  debuglog('Retrying websocket connection in %d seconds (attempt #%d)', this._wsReconnectDelay, this._wsReconnectAttempts);
+
+  // Make sure we never double-schedule reconnection.
+  if (this._wsReconnectTimer) {
+    clearTimeout(this._wsReconnectTimer);
+  }
+
+  this._wsReconnectTimer = setTimeout(this._wsConnect.bind(this), this._wsReconnectDelay * 1000);
 };
 
 ModeDevice.prototype.listenCommands = function() {
-  this.scheduleReconnect(true);
-};
-
-ModeDevice.prototype.triggerPing = function() {
-  if (this.websocket !== null) {
-    try {
-      this.websocket.ping();
-    } catch(e) {
-      debuglog('Failed to trigger ping', e);
-    }
+  if (this._listeningCommands) {
+    return;
   }
+
+  debuglog('Start listening to commands');
+  this._listeningCommands = true;
+  this._wsReconnectAttempts = 0;
+  this._wsRconnectDelay = 0;
+  this._wsConnect();
 };
 
-var defaultEventFinishedCallback = function() {
+ModeDevice.prototype.stopCommands = function() {
+  if (!this._listeningCommands) {
+    return;
+  }
+
+  debuglog('Stop listening to commands');
+  this._listeningCommands = false;
+  this._wsDisconnect();
+
+  // Make sure any scheduled reconnection is cancelled.
+  if (this._wsReconnectTimer) {
+    clearTimeout(this._wsReconnectTimer);
+    this._wsReconnectTimer = null;
+  }
 };
 
 ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
   this.eventCounter += 1;
   var eventId = this.eventCounter;
-  debuglog('Triggering event #' + eventId);
+  debuglog('Triggering event #%d', eventId);
 
   if((typeof eventType) != "string" && !(eventType instanceof String)) {
     throw "eventType must be string";
@@ -271,19 +310,17 @@ ModeDevice.prototype.triggerEvent = function(eventType, eventData) {
     });
     res.on('end', function() {
       if (wasSuccess) {
-        debuglog('Event #' + eventId + ' triggered');
+        debuglog('Event #%d triggered', eventId);
         that.eventFinishedCallback();
       } else {
-        debuglog('Event #' + eventId + ' failed with an error');
+        debuglog('Event #%d failed with an error', eventId);
         that.eventErrorCallback(body);
       }
     });
   }.bind(this));
-  req.on('socket', function() {
-    debuglog('Socket is allocated to event #' + eventId);
-  });
+
   req.setTimeout(this.timeout, function() {
-    debuglog('Event #' + eventId + ' timed out');
+    debuglog('Event #%d has timed out', eventId);
     req.abort();
   });
   req.write(jsonData);
