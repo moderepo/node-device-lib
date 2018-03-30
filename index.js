@@ -132,7 +132,7 @@ ModeDevice.prototype._wsHandleOpen = function() {
 
 ModeDevice.prototype._wsHandleMessage = function(message) {
   debuglog('Received websocket message: "%s"', message);
-  let data;
+  var data;
   try {
     data = JSON.parse(message);
   } catch (e) {
