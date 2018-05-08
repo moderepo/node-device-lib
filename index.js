@@ -187,7 +187,8 @@ ModeDevice.prototype._wsConnect = function() {
     agent: this.apiHttpAgent,
     headers: {
       "Authorization": 'ModeCloud ' + this.token
-    }
+    },
+    handshakeTimeout: 20000
   });
 
   this._websocket.on('error', this._wsHandleError.bind(this));
